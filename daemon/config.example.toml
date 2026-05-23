@@ -1,0 +1,82 @@
+# state_path       = "~/.local/state/trailboss/state.json"  # default
+# sessions_path    = "~/.local/state/trailboss/sessions.jsonl"
+# pid_path         = "~/.local/state/trailboss/trailboss.pid"
+# default_provider = "claude"
+# howdy            = false
+
+[[source]]
+name     = "nvim"
+path     = "~/.local/share/trailboss/comments.jsonl"
+id_field = "id"
+# provider omitted: uses default_provider
+runtime  = "background"
+tab_name_template = "{{.type}}: {{.path}}:{{.line}}"
+prompt_template = """
+{{- if eq .type "act"}}
+Address the following in `{{.path}}` (lines {{.line}}-{{.end_line}}):
+
+```
+{{.body}}
+```
+
+Take action — implement, fix, or refactor as needed.
+{{- else}}
+Research/explain the following from `{{.path}}` (lines {{.line}}-{{.end_line}}):
+
+```
+{{.body}}
+```
+
+Provide a clear explanation or answer. Do not modify files.
+{{- end}}
+"""
+
+[[source]]
+name     = "comview"
+path     = "/path/to/your/project/.comview/comments.jsonl"
+id_field = "id"
+provider = "claude"
+runtime  = "background"
+tab_name_template = "review: {{.path}}:{{.line}}"
+prompt_template = """
+Review comment on `{{.path}}` line {{.line}}:
+
+{{- if .diff_hunk}}
+
+```diff
+{{.diff_hunk}}
+```
+{{- end}}
+
+**Comment:** {{.body}}
+
+Please review this code and address the comment.
+"""
+
+# claude — howdy ping to get session ID, then continue with real prompt
+[provider.claude]
+command          = "claude"
+launch_args      = ["-p", "{{.Prompt}}", "--output-format", "json"]
+continue_args    = ["--resume", "{{.SessionID}}", "-p", "{{.Prompt}}", "--output-format", "json"]
+dangerous_args   = ["--dangerously-skip-permissions"]
+resume_args      = ["--resume", "{{.SessionID}}"]
+session_from     = "howdy"
+session_id_field = "session_id"
+
+# pi — polls ~/.pi/agent/sessions/<cwd> for a new session file after launch
+[provider.pi]
+command      = "pi"
+launch_args  = ["-p", "{{.Prompt}}", "--mode", "json"]
+resume_args  = ["--continue"]
+session_from = "poll-dir"
+session_dir  = "~/.pi/agent/sessions/{{.CWDEncoded}}"
+
+# codex — polls ~/.codex/sessions/YYYY/MM/DD for a new session file after launch
+[provider.codex]
+command      = "codex"
+launch_args  = ["exec", "{{.Prompt}}", "-C", "{{.CWD}}"]
+# launch_args = ["exec", "{{.Prompt}}", "-C", "{{.CWD}}", "--skip-git-repo-check"] # outside git repos
+dangerous_args = ["--dangerously-bypass-approvals-and-sandbox"]
+resume_args  = ["resume", "{{.SessionID}}"]
+session_from = "poll-dir"
+session_dir  = "~/.codex/sessions/{{.Year}}/{{.Month}}/{{.Day}}"

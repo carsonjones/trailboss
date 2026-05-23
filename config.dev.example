@@ -1,0 +1,46 @@
+state_path    = "/tmp/trailboss-dev-state.json"
+sessions_path = "/tmp/trailboss-dev-sessions.jsonl"
+default_provider = "claude"
+
+[[source]]
+name     = "dev"
+path     = "/tmp/trailboss-dev.jsonl"
+id_field = "id"
+runtime  = "background"
+tab_name_template = "{{.type}}: {{.path}}:{{.line}}"
+prompt_template = """
+{{- if eq .type "act"}}
+Address the following in `{{.path}}` (lines {{.line}}-{{.end_line}}):
+
+```
+{{.body}}
+```
+
+Take action: implement, fix, or refactor as needed.
+{{- else}}
+Research/explain the following from `{{.path}}` (lines {{.line}}-{{.end_line}}):
+
+```
+{{.body}}
+```
+
+Provide a clear explanation or answer. Do not modify files.
+{{- end}}
+"""
+
+[provider.claude]
+command          = "claude"
+launch_args      = ["-p", "{{.Prompt}}", "--output-format", "json"]
+continue_args    = ["--resume", "{{.SessionID}}", "-p", "{{.Prompt}}", "--output-format", "json"]
+dangerous_args   = ["--dangerously-skip-permissions"]
+resume_args      = ["--resume", "{{.SessionID}}"]
+session_from     = "howdy"
+session_id_field = "session_id"
+
+[provider.codex]
+command        = "codex"
+launch_args    = ["exec", "{{.Prompt}}", "-C", "{{.CWD}}"]
+dangerous_args = ["--dangerously-bypass-approvals-and-sandbox"]
+resume_args    = ["resume", "{{.SessionID}}"]
+session_from   = "poll-dir"
+session_dir    = "~/.codex/sessions/{{.Year}}/{{.Month}}/{{.Day}}"
