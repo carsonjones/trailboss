@@ -65,6 +65,19 @@ If it runs from a terminal, Trailboss can send it.
 
 ## Getting Started
 
+From a checkout:
+
+```sh
+make install
+```
+
+That installs the `trailboss` CLI, the Zellij plugin, and the Neovim integration.
+It also creates `~/.config/trailboss/config.toml` from the default config if one
+doesn't already exist.
+Make sure `~/.local/bin` is on your `PATH` so the `trailboss` command resolves.
+
+From outside the repo:
+
 ```sh
 go install github.com/carsonjones/trailboss/daemon/cmd/trailboss@latest
 ```
@@ -75,7 +88,7 @@ Optional shorthand (add to your shell rc):
 alias tb="trailboss"
 ```
 
-Create a config at `~/.config/trailboss/config.toml` (see [config.example.toml](daemon/config.example.toml)), then start the daemon:
+Review `~/.config/trailboss/config.toml` if you want to change providers, then start the daemon:
 
 ```bash
 trailboss start
@@ -91,7 +104,7 @@ trailboss ask "explain the retry logic in backoff.go"
 Check on it:
 
 ```bash
-trailboss ls
+trailboss list
 ```
 
 Resume a completed session interactively:
@@ -110,7 +123,7 @@ trailboss stop               stop the daemon
 trailboss status             daemon status
 trailboss ask <prompt>       ask a question (explain, don't modify)
 trailboss act <prompt>       take action (implement, fix, refactor)
-trailboss trails             list all trails
+trailboss trails|ls|list     list all trails
 trailboss resume <id|last>   resume a completed session
 trailboss rm <id>            remove a trail
 trailboss clear              remove all trails
@@ -151,9 +164,26 @@ trailboss resume abc123    # specific session by ID
 ### `trails`
 
 ```
-ID      NAME                      AGE   STATUS   RESUME
-abc123  fix: auth.go:42           5m    done     claude --resume <id>
-def456  ask: explain goroutines   2m    running
+ID      STATUS   AGE   NAME                      RESUME
+abc123  done     5m    fix: auth.go:42           claude --resume <id>
+def456  running  2m    ask: explain goroutines
+```
+
+On narrower terminals, `trailboss ls` switches to a stacked layout:
+
+```
+abc123  done  5m
+name:   fix: auth.go:42
+resume: claude --resume <id>
+---
+def456  running  2m
+name:   ask: explain goroutines
+```
+
+For scripts, use JSON instead of scraping the display output:
+
+```bash
+trailboss ls -json | jq '.[] | select(.status == "done") | .resume'
 ```
 
 ---
@@ -273,8 +303,11 @@ It standardizes how you launch them.
 ## Development
 
 ```bash
-# build the daemon
-make build-daemon
+# build the CLI
+make build-cli
+
+# install the CLI, zellij plugin, nvim integration, and default config
+make install
 
 # create a local dev config
 cp config.dev.example config.dev.toml

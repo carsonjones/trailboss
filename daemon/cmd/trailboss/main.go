@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/rockorager/trailboss/internal"
+	"golang.org/x/sys/unix"
 )
 
 var version = "dev"
@@ -27,7 +30,8 @@ Commands:
   stop         stop the daemon
   status       show daemon status
   daemon       run in the foreground (used by start, launchd, brew services)
-  trails, ls   list background sessions (--last N, default 10)
+  trails, ls, list
+               list background sessions (--last N, default 10)
   rm <id>      remove a session by ID
   clear        remove all sessions
   ask          send a question to a background agent (explain, don't modify)
@@ -55,7 +59,7 @@ func main() {
 		err = runStatus(os.Args[2:])
 	case "daemon":
 		err = runDaemon(os.Args[2:])
-	case "trails", "ls":
+	case "trails", "ls", "list":
 		err = runLS(os.Args[2:])
 	case "rm":
 		err = runRM(os.Args[2:])
@@ -238,6 +242,7 @@ func runLS(args []string) error {
 	fs := flagSet("trails")
 	cfgPath := configFlag(fs)
 	last := fs.Int("last", 10, "max trails to show")
+	jsonOutput := fs.Bool("json", false, "output trails as JSON")
 	fs.Parse(args)
 
 	cfg, err := internal.LoadConfig(*cfgPath)
@@ -252,33 +257,116 @@ func runLS(args []string) error {
 	}
 
 	if len(list) == 0 {
+		if *jsonOutput {
+			fmt.Println("[]")
+			return nil
+		}
 		fmt.Println("no sessions")
 		return nil
 	}
 
 	total := len(list)
-	if *last > 0 && total > *last {
-		fmt.Printf("Showing last %d of %d trails\n", *last, total)
+	truncated := *last > 0 && total > *last
+	if truncated {
 		list = list[total-*last:]
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tAGE\tSTATUS\tRESUME")
+	if *jsonOutput {
+		return printTrailJSON(os.Stdout, list, cfg)
+	}
+
+	if truncated {
+		fmt.Printf("Showing last %d of %d trails\n", *last, total)
+	}
+
+	if terminalWidth(os.Stdout) < 100 {
+		printTrailBlocks(os.Stdout, list, cfg)
+		return nil
+	}
+	return printTrailTable(os.Stdout, list, cfg)
+}
+
+func trailStatus(s internal.SessionStatus) string {
+	switch {
+	case s.Done:
+		return "done"
+	case s.Failed:
+		return "failed"
+	default:
+		return "running"
+	}
+}
+
+func trailResume(s internal.SessionStatus, cfg internal.Config) string {
+	if !s.Done {
+		return ""
+	}
+	provider, ok := cfg.Providers[s.Provider]
+	if !ok {
+		return ""
+	}
+	resumeArgs := internal.RenderArgs(provider.ResumeArgs, "", s.SessionID, "")
+	return provider.Command + " " + strings.Join(resumeArgs, " ")
+}
+
+type trailOutput struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	StartedAt time.Time `json:"started_at"`
+	Provider  string    `json:"provider"`
+	SessionID string    `json:"session_id,omitempty"`
+	CWD       string    `json:"cwd,omitempty"`
+	Resume    string    `json:"resume,omitempty"`
+}
+
+func printTrailJSON(out *os.File, list []internal.SessionStatus, cfg internal.Config) error {
+	trails := make([]trailOutput, 0, len(list))
 	for _, s := range list {
-		status := "running"
-		resume := ""
-		if s.Done {
-			status = "done"
-			if provider, ok := cfg.Providers[s.Provider]; ok {
-				resumeArgs := internal.RenderArgs(provider.ResumeArgs, "", s.SessionID, "")
-				resume = provider.Command + " " + strings.Join(resumeArgs, " ")
-			}
-		} else if s.Failed {
-			status = "failed"
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.ID, s.Name, age(s.StartedAt), status, resume)
+		trails = append(trails, trailOutput{
+			ID:        s.ID,
+			Name:      s.Name,
+			Status:    trailStatus(s),
+			StartedAt: s.StartedAt,
+			Provider:  s.Provider,
+			SessionID: s.SessionID,
+			CWD:       s.CWD,
+			Resume:    trailResume(s, cfg),
+		})
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(trails)
+}
+
+func printTrailTable(out *os.File, list []internal.SessionStatus, cfg internal.Config) error {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tSTATUS\tAGE\tNAME\tRESUME")
+	for _, s := range list {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.ID, trailStatus(s), age(s.StartedAt), s.Name, trailResume(s, cfg))
 	}
 	return w.Flush()
+}
+
+func printTrailBlocks(out *os.File, list []internal.SessionStatus, cfg internal.Config) {
+	for i, s := range list {
+		if i > 0 {
+			fmt.Fprintln(out, "---")
+		}
+		fmt.Fprintf(out, "%s  %s  %s\n", s.ID, trailStatus(s), age(s.StartedAt))
+		fmt.Fprintf(out, "name:   %s\n", s.Name)
+		if resume := trailResume(s, cfg); resume != "" {
+			fmt.Fprintf(out, "resume: %s\n", resume)
+		}
+	}
+}
+
+func terminalWidth(out *os.File) int {
+	ws, err := unix.IoctlGetWinsize(int(out.Fd()), unix.TIOCGWINSZ)
+	if err != nil || ws.Col == 0 {
+		return 120
+	}
+	return int(ws.Col)
 }
 
 func runRM(args []string) error {
@@ -547,6 +635,9 @@ func readPID(path string) (int, error) {
 }
 
 func writePID(path string, pid int) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("mkdir pid dir: %w", err)
+	}
 	return os.WriteFile(path, []byte(strconv.Itoa(pid)), 0o644)
 }
 
