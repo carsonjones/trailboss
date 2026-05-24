@@ -169,17 +169,6 @@ abc123  done     5m    fix: auth.go:42           claude --resume <id>
 def456  running  2m    ask: explain goroutines
 ```
 
-On narrower terminals, `trailboss ls` switches to a stacked layout:
-
-```
-abc123  done  5m
-name:   fix: auth.go:42
-resume: claude --resume <id>
----
-def456  running  2m
-name:   ask: explain goroutines
-```
-
 For scripts, use JSON instead of scraping the display output:
 
 ```bash
@@ -222,6 +211,18 @@ Select code in visual mode and dispatch it as a trail without leaving the editor
 ```lua
 {
   dir = "/path/to/trailboss/nvim",
+  dependencies = {
+    {
+      "rcarriga/nvim-notify",
+      config = function()
+        vim.notify = require("notify")
+      end,
+    },
+    {
+      "stevearc/dressing.nvim",
+      opts = {},
+    },
+  },
   config = function()
     require("trailboss").setup({
       source_path = "~/.local/share/trailboss/comments.jsonl",
