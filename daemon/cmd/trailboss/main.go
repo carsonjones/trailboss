@@ -495,14 +495,8 @@ func runAct(args []string) error {
 		name = name[:47] + "..."
 	}
 
-	if !*safe && len(provider.DangerousArgs) > 0 {
-		p := provider
-		if provider.SessionFrom == "howdy" {
-			p.ContinueArgs = append(append([]string{}, provider.ContinueArgs...), provider.DangerousArgs...)
-		} else {
-			p.LaunchArgs = append(append([]string{}, provider.LaunchArgs...), provider.DangerousArgs...)
-		}
-		provider = p
+	if !*safe {
+		provider = withDangerousArgs(provider, cfg.Howdy)
 	}
 
 	cwd, _ := os.Getwd()
@@ -580,16 +574,10 @@ func runResume(args []string) error {
 	return syscall.Exec(exe, append([]string{provider.Command}, resumeArgs...), os.Environ())
 }
 
-func launchFn(src internal.SourceConfig, cfg internal.Config, sessions *internal.SessionStore) func(string, string, string, internal.ProviderConfig) error {
-	return func(tabName, prompt, cwd string, provider internal.ProviderConfig) error {
-		if src.Dangerous && len(provider.DangerousArgs) > 0 {
-			p := provider
-			if provider.SessionFrom == "howdy" {
-				p.ContinueArgs = append(append([]string{}, provider.ContinueArgs...), provider.DangerousArgs...)
-			} else {
-				p.LaunchArgs = append(append([]string{}, provider.LaunchArgs...), provider.DangerousArgs...)
-			}
-			provider = p
+func launchFn(src internal.SourceConfig, cfg internal.Config, sessions *internal.SessionStore) func(string, string, string, internal.ProviderConfig, bool) error {
+	return func(tabName, prompt, cwd string, provider internal.ProviderConfig, dangerous bool) error {
+		if dangerous {
+			provider = withDangerousArgs(provider, cfg.Howdy)
 		}
 		switch src.Runtime {
 		case "background", "":
@@ -602,6 +590,19 @@ func launchFn(src internal.SourceConfig, cfg internal.Config, sessions *internal
 			return internal.ZellijLaunch(tabName, prompt, provider, runtime)
 		}
 	}
+}
+
+func withDangerousArgs(provider internal.ProviderConfig, howdy bool) internal.ProviderConfig {
+	if len(provider.DangerousArgs) == 0 {
+		return provider
+	}
+	p := provider
+	if provider.SessionFrom == "howdy" && howdy {
+		p.ContinueArgs = append(append([]string{}, provider.ContinueArgs...), provider.DangerousArgs...)
+	} else {
+		p.LaunchArgs = append(append([]string{}, provider.LaunchArgs...), provider.DangerousArgs...)
+	}
+	return p
 }
 
 func sourceWithDefaults(src internal.SourceConfig, cfg internal.Config) internal.SourceConfig {

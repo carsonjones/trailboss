@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-func ProcessSource(src SourceConfig, state *State, launch func(tabName, prompt, cwd string, provider ProviderConfig) error, providers map[string]ProviderConfig) error {
+func ProcessSource(src SourceConfig, state *State, launch func(tabName, prompt, cwd string, provider ProviderConfig, dangerous bool) error, providers map[string]ProviderConfig) error {
 	f, err := os.Open(src.Path)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", src.Path, err)
@@ -68,11 +68,13 @@ func ProcessSource(src SourceConfig, state *State, launch func(tabName, prompt, 
 		if cwd == "" {
 			p, ok := item["path"].(string)
 			if ok && p != "" {
-			cwd = filepath.Dir(p)
+				cwd = filepath.Dir(p)
 			}
 		}
 
-		if err := launch(tabName, prompt, cwd, provider); err != nil {
+		itemType, _ := item["type"].(string)
+		dangerous := src.Dangerous || itemType == "act"
+		if err := launch(tabName, prompt, cwd, provider, dangerous); err != nil {
 			slog.Error("launch", "source", src.Name, "id", id, "err", err)
 			continue
 		}

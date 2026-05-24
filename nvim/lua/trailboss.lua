@@ -29,10 +29,14 @@ local function get_current_file()
   }
 end
 
+local function notify(msg, level)
+  vim.notify(msg, level or vim.log.levels.INFO, { title = "trailboss" })
+end
+
 local function send(type, sel, steer)
   local path = vim.fn.expand("%:p")
   if path == "" then
-    vim.notify("trailboss: current buffer has no file path", vim.log.levels.ERROR)
+    notify("current buffer has no file path", vim.log.levels.ERROR)
     return
   end
 
@@ -52,7 +56,7 @@ local function send(type, sel, steer)
     end
   end
   if body == "" then
-    vim.notify("trailboss: prompt required", vim.log.levels.ERROR)
+    notify("prompt required", vim.log.levels.ERROR)
     return
   end
 
@@ -68,12 +72,12 @@ local function send(type, sel, steer)
 
   local f = io.open(vim.fn.expand(M.config.source_path), "a")
   if not f then
-    vim.notify("trailboss: could not open " .. M.config.source_path, vim.log.levels.ERROR)
+    notify("could not open " .. M.config.source_path, vim.log.levels.ERROR)
     return
   end
   f:write(record .. "\n")
   f:close()
-  vim.notify(string.format("trailboss: %s queued (%s:%d)", type, vim.fn.expand("%:t"), sel.start_line))
+  notify(string.format("%s queued (%s:%d)", type, vim.fn.expand("%:t"), sel.start_line))
 end
 
 local function prompt(type, sel)
