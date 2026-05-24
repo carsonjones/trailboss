@@ -11,6 +11,8 @@ It doesn't build another platform.
 
 Trailboss starts work on own trails, letting you stay focused on yours.
 
+![demo](docs/demo.gif)
+
 ```bash
 trailboss ask "explain this code"
 trailboss act "fix the failing test"
