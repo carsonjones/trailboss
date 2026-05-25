@@ -49,6 +49,9 @@ resume_args  = ["--continue"]
 session_from = "poll-dir"
 session_dir  = "~/.pi/agent/sessions/{{.CWDEncoded}}"
 
+# zellij runtime - opens each trail in a new zellij tab
+[runtime.zellij]
+
 # codex - polls ~/.codex/sessions/YYYY/MM/DD for a new session file after launch
 [provider.codex]
 command      = "codex"

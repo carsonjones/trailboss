@@ -50,9 +50,7 @@ type ProviderConfig struct {
 	SessionIDField string   `toml:"session_id_field"` // howdy: JSON field for session ID, default "session_id"
 }
 
-type RuntimeConfig struct {
-	PluginPath string `toml:"plugin_path"`
-}
+type RuntimeConfig struct{}
 
 func LoadConfig(path string) (Config, error) {
 	data, err := os.ReadFile(path)

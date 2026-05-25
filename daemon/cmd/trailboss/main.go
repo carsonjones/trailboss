@@ -34,8 +34,8 @@ Commands:
                list background sessions (--last N, default 10)
   rm <id>      remove a session by ID
   clear        remove all sessions
-  ask          send a question to a background agent (explain, don't modify)
-  act          send an action to a background agent (implement, fix, refactor)
+  ask          send a question to an agent (explain, don't modify)
+  act          send an action to an agent (implement, fix, refactor)
   resume <id>  resume a completed background session
 
 Flags:
@@ -422,11 +422,12 @@ func runAsk(args []string) error {
 	fs := flagSet("ask")
 	cfgPath := configFlag(fs)
 	providerName := fs.String("p", "", "provider to use")
+	runtimeName := fs.String("r", "background", "runtime to use (background or configured runtime)")
 	fs.Parse(args)
 
 	prompt := strings.Join(fs.Args(), " ")
 	if prompt == "" {
-		return fmt.Errorf("usage: trailboss ask [-p provider] <prompt>")
+		return fmt.Errorf("usage: trailboss ask [-p provider] [-r runtime] <prompt>")
 	}
 
 	cfg, err := internal.LoadConfig(*cfgPath)
@@ -452,11 +453,21 @@ func runAsk(args []string) error {
 	}
 
 	cwd, _ := os.Getwd()
-	sessions := internal.NewSessionStore(cfg.SessionsPath)
-	if err := internal.BackgroundLaunch("ask: "+name, prompt, cwd, *providerName, provider, sessions, cfg.Howdy); err != nil {
+	if *runtimeName == "background" || *runtimeName == "" {
+		sessions := internal.NewSessionStore(cfg.SessionsPath)
+		if err := internal.BackgroundLaunch("ask: "+name, prompt, cwd, *providerName, provider, sessions, cfg.Howdy); err != nil {
+			return fmt.Errorf("launch: %w", err)
+		}
+		fmt.Println("queued")
+		return nil
+	}
+	if err := checkRuntime(*runtimeName, cfg); err != nil {
+		return err
+	}
+	if err := internal.ZellijLaunch("ask: "+name, prompt, cwd, provider); err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
-	fmt.Println("queued")
+	fmt.Println("launched")
 	return nil
 }
 
@@ -464,13 +475,14 @@ func runAct(args []string) error {
 	fs := flagSet("act")
 	cfgPath := configFlag(fs)
 	providerName := fs.String("p", "", "provider to use")
+	runtimeName := fs.String("r", "background", "runtime to use (background or configured runtime)")
 	safe := fs.Bool("safe", false, "skip dangerous_args even if configured")
 	fs.BoolVar(safe, "s", false, "skip dangerous_args even if configured")
 	fs.Parse(args)
 
 	prompt := strings.Join(fs.Args(), " ")
 	if prompt == "" {
-		return fmt.Errorf("usage: trailboss act [-p provider] [-s] <prompt>")
+		return fmt.Errorf("usage: trailboss act [-p provider] [-r runtime] [-s] <prompt>")
 	}
 
 	cfg, err := internal.LoadConfig(*cfgPath)
@@ -500,11 +512,21 @@ func runAct(args []string) error {
 	}
 
 	cwd, _ := os.Getwd()
-	sessions := internal.NewSessionStore(cfg.SessionsPath)
-	if err := internal.BackgroundLaunch("act: "+name, prompt, cwd, *providerName, provider, sessions, cfg.Howdy); err != nil {
+	if *runtimeName == "background" || *runtimeName == "" {
+		sessions := internal.NewSessionStore(cfg.SessionsPath)
+		if err := internal.BackgroundLaunch("act: "+name, prompt, cwd, *providerName, provider, sessions, cfg.Howdy); err != nil {
+			return fmt.Errorf("launch: %w", err)
+		}
+		fmt.Println("queued")
+		return nil
+	}
+	if err := checkRuntime(*runtimeName, cfg); err != nil {
+		return err
+	}
+	if err := internal.ZellijLaunch("act: "+name, prompt, cwd, provider); err != nil {
 		return fmt.Errorf("launch: %w", err)
 	}
-	fmt.Println("queued")
+	fmt.Println("launched")
 	return nil
 }
 
@@ -583,13 +605,22 @@ func launchFn(src internal.SourceConfig, cfg internal.Config, sessions *internal
 		case "background", "":
 			return internal.BackgroundLaunch(tabName, prompt, cwd, src.Provider, provider, sessions, cfg.Howdy)
 		default:
-			runtime, ok := cfg.Runtimes[src.Runtime]
-			if !ok {
-				return fmt.Errorf("unknown runtime %q", src.Runtime)
+			if err := checkRuntime(src.Runtime, cfg); err != nil {
+				return err
 			}
-			return internal.ZellijLaunch(tabName, prompt, provider, runtime)
+			return internal.ZellijLaunch(tabName, prompt, cwd, provider)
 		}
 	}
+}
+
+func checkRuntime(name string, cfg internal.Config) error {
+	if _, ok := cfg.Runtimes[name]; ok {
+		return nil
+	}
+	if name == "zellij" {
+		return nil
+	}
+	return fmt.Errorf("unknown runtime %q", name)
 }
 
 func withDangerousArgs(provider internal.ProviderConfig, howdy bool) internal.ProviderConfig {

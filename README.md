@@ -17,6 +17,7 @@ Trailboss starts work on own trails, letting you stay focused on yours.
 trailboss ask "explain this code"
 trailboss act "fix the failing test"
 trailboss ask -p codex "add integration tests"
+trailboss act -r zellij "fix this in a new Zellij tab"
 ```
 
 ---
@@ -73,7 +74,7 @@ From a checkout:
 make install
 ```
 
-That installs the `trailboss` CLI, the Zellij plugin, and the Neovim integration.
+That installs the `trailboss` CLI, the Neovim integration, and the default config.
 It also creates `~/.config/trailboss/config.toml` from the default config if one
 doesn't already exist.
 Make sure `~/.local/bin` is on your `PATH` so the `trailboss` command resolves.
@@ -123,8 +124,11 @@ trailboss resume last
 trailboss start              start the daemon
 trailboss stop               stop the daemon
 trailboss status             daemon status
-trailboss ask <prompt>       ask a question (explain, don't modify)
-trailboss act <prompt>       take action (implement, fix, refactor)
+trailboss ask [-r runtime] <prompt>
+                           ask a question (explain, don't modify)
+trailboss act [-r runtime] <prompt>
+                           take action (implement, fix, refactor)
+                           use -r zellij to launch in a Zellij tab
 trailboss trails|ls|list     list all trails
 trailboss resume <id|last>   resume a completed session
 trailboss rm <id>            remove a trail
@@ -140,6 +144,7 @@ Question mode. The agent explains, answers, and researches — but doesn't touch
 ```bash
 trailboss ask "why does the auth middleware panic on nil context?"
 trailboss ask -p codex "explain the retry logic in backoff.go"
+trailboss ask -r zellij "explain this in a new Zellij tab"
 ```
 
 ### `act`
@@ -149,6 +154,7 @@ Action mode. The agent implements, fixes, or refactors.
 ```bash
 trailboss act "fix the failing test in auth_test.go"
 trailboss act -p codex "add integration tests for the user service"
+trailboss act -r zellij "fix this in a new Zellij tab"
 trailboss act -s "refactor this carefully"   # skip dangerous_args for this run
 ```
 
@@ -263,10 +269,27 @@ Make sure your trailboss config knows about where your nvim plugin is writing or
 | `path` | Path to the JSONL file |
 | `id_field` | JSON field used as the dedup key |
 | `provider` | Which `[provider.*]` to dispatch to; omit to use `default_provider` |
-| `runtime` | `background` (default) or a named `[runtime.*]` |
+| `runtime` | `background` (default) or a named `[runtime.*]`, e.g. `zellij` |
 | `dangerous` | `true` to append `dangerous_args` on dispatch (default `false`) |
 | `prompt_template` | Go template; all JSON fields available |
 | `tab_name_template` | Go template for the session label |
+
+### Runtime
+
+Define named launch targets for `-r <name>` or `source.runtime`.
+
+```toml
+[runtime.zellij]
+```
+
+`zellij` opens each trail in a new tab using `zellij action new-tab`. It works even if `[runtime.zellij]` is not present, so existing configs can opt in with `-r zellij` without edits. No plugin is required on current Zellij versions.
+
+
+```toml
+[runtime.tmux]
+```
+
+__contributors wanted__
 
 ### Provider
 
@@ -309,7 +332,7 @@ It standardizes how you launch them.
 # build the CLI
 make build-cli
 
-# install the CLI, zellij plugin, nvim integration, and default config
+# install the CLI, nvim integration, and default config
 make install
 
 # create a local dev config

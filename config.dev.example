@@ -28,6 +28,8 @@ Provide a clear explanation or answer. Do not modify files.
 {{- end}}
 """
 
+[runtime.zellij]
+
 [provider.claude]
 command          = "claude"
 launch_args      = ["-p", "{{.Prompt}}", "--output-format", "json"]

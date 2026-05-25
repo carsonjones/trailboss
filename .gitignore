@@ -1,6 +1,5 @@
 # Build artifacts
 /bin/
-/plugin/target/
 
 # Local development config/state
 /config.dev.toml
