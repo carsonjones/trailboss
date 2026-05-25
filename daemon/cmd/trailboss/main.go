@@ -34,8 +34,12 @@ Commands:
                list background sessions (--last N, default 10)
   rm <id>      remove a session by ID
   clear        remove all sessions
-  ask          send a question to an agent (explain, don't modify)
-  act          send an action to an agent (implement, fix, refactor)
+  ask [-p provider] [-r runtime] <prompt>
+               send a question to an agent (explain, don't modify)
+               use -r zellij to launch in a Zellij tab
+  act [-p provider] [-r runtime] [-s] <prompt>
+               send an action to an agent (implement, fix, refactor)
+               use -r zellij to launch in a Zellij tab
   resume <id>  resume a completed background session
 
 Flags:
